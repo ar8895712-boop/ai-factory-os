@@ -17,9 +17,16 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from backend.config import get_settings
 
+import os
+from pathlib import Path
+
 # ── Load DB URL from config ─────────────────────────────────────────
 _settings = get_settings()
-DATABASE_URL: str = _settings.database_url
+DATABASE_URL: str = os.getenv("DATABASE_URL", _settings.database_url)
+
+# Render and Neon Postgres provide URLs starting with postgres://, which SQLAlchemy requires as postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 # ── Engine setup ─────────────────────────────────────────────────────
 # For SQLite we need check_same_thread=False (FastAPI uses threads).
@@ -27,6 +34,12 @@ DATABASE_URL: str = _settings.database_url
 _connect_args = {}
 if DATABASE_URL.startswith("sqlite"):
     _connect_args["check_same_thread"] = False
+    # Ensure local directory for SQLite file exists
+    if "///" in DATABASE_URL:
+        db_file_str = DATABASE_URL.split("///", 1)[1]
+        db_file_path = Path(db_file_str)
+        if db_file_path.parent and str(db_file_path.parent) != ".":
+            db_file_path.parent.mkdir(parents=True, exist_ok=True)
 
 engine = create_engine(
     DATABASE_URL,

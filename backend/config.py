@@ -147,22 +147,58 @@ class Settings(BaseModel):
     websocket: WebSocketConfig = Field(default_factory=WebSocketConfig)
 
 
+def _find_config_file() -> Path:
+    """
+    Resolve config file path in priority order:
+    1. Explicit CONFIG_PATH env var (if exists)
+    2. PROJECT_ROOT / 'config.yaml' (local customized configuration)
+    3. PROJECT_ROOT / 'config.example.yaml' (production fallback if config.yaml is gitignored)
+    """
+    env_path = os.getenv("CONFIG_PATH")
+    if env_path:
+        p = Path(env_path)
+        if not p.is_absolute():
+            p = PROJECT_ROOT / p
+        if p.exists():
+            return p
+
+    default_path = PROJECT_ROOT / "config.yaml"
+    if default_path.exists():
+        return default_path
+
+    example_path = PROJECT_ROOT / "config.example.yaml"
+    if example_path.exists():
+        return example_path
+
+    raise FileNotFoundError(
+        f"Config file not found. Looked for {env_path or default_path} and {example_path}"
+    )
+
+
 def _load_yaml(path: Path) -> Dict[str, Any]:
-    """Read and parse config.yaml.  Raises FileNotFoundError if missing."""
+    """Read and parse YAML config file."""
     if not path.exists():
         raise FileNotFoundError(f"Config file not found: {path}")
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        return yaml.safe_load(f) or {}
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     """
-    Singleton loader.  Reads config.yaml once per process lifetime.
-    Override the path with env var CONFIG_PATH if needed.
+    Singleton loader. Reads config file once per process lifetime.
+    Falls back to config.example.yaml if config.yaml is not present.
+    Environment variables (e.g. DATABASE_URL, LOG_LEVEL) override YAML values.
     """
-    config_path = Path(os.getenv("CONFIG_PATH", str(CONFIG_PATH)))
+    config_path = _find_config_file()
     raw: Dict[str, Any] = _load_yaml(config_path)
+
+    # Allow environment variable overrides in cloud deployments
+    if os.getenv("DATABASE_URL"):
+        raw["database_url"] = os.getenv("DATABASE_URL")
+    if os.getenv("LOG_LEVEL"):
+        raw["log_level"] = os.getenv("LOG_LEVEL")
+
     return Settings(**raw)
 
 
