@@ -1,0 +1,33 @@
+# ==============================================================
+# .github/release.yml — Automated GitHub Release Notes Categorization
+# Maps Conventional Commits and PR labels to release note sections
+# ==============================================================
+
+changelog:
+  categories:
+    - title: "🚀 New Features & Capabilities"
+      labels:
+        - "feat"
+        - "feature"
+    - title: "🐛 Bug Fixes & Stability"
+      labels:
+        - "fix"
+        - "bug"
+    - title: "⚡ Performance Improvements"
+      labels:
+        - "perf"
+        - "performance"
+    - title: "🧠 ML & Prognostic Models"
+      labels:
+        - "ml"
+        - "models"
+    - title: "📚 Documentation & Presentation"
+      labels:
+        - "docs"
+        - "documentation"
+    - title: "🛠️ DevOps, CI/CD & Maintenance"
+      labels:
+        - "chore"
+        - "ci"
+        - "build"
+        - "dependencies"

@@ -1,0 +1,8 @@
+{
+  "iforest_threshold": 0.5200464074643053,
+  "iforest_fpr": 0.020216606498194945,
+  "iforest_tpr": 1.0,
+  "autoencoder_threshold": 0.01540746446698904,
+  "autoencoder_fpr": 0.020216606498194945,
+  "autoencoder_tpr": 0.10476190476190476
+}

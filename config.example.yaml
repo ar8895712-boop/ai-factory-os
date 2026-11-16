@@ -1,0 +1,168 @@
+# ==============================================================
+# AI Factory Operating System — Master Configuration Template
+# Copy this file to config.yaml and adjust for your local plant
+# All currency values in Indian Rupees (₹)
+# ==============================================================
+
+# ------ Global ------
+random_seed: 42
+database_url: "sqlite:///./data/factory.db"   # In production: "postgresql://user:pass@localhost:5432/factory_os"
+log_level: "INFO"
+
+# ------ Factory Machines ------
+# Monitored industrial assets mapped to benchmark trajectories
+machines:
+  - id: 1
+    name: "Compressor Unit A"
+    type: "Centrifugal Compressor"
+    location: "Bay 1 — North"
+    demo_engine_id: 3
+  - id: 2
+    name: "Turbine Engine B"
+    type: "Gas Turbine"
+    location: "Bay 2 — East"
+    demo_engine_id: 15
+  - id: 3
+    name: "Milling Station C"
+    type: "CNC Milling Station"
+    location: "Bay 3 — West"
+    demo_engine_id: 21
+  - id: 4
+    name: "Pump Assembly D"
+    type: "Centrifugal Pump"
+    location: "Bay 1 — South"
+    demo_engine_id: 22
+  - id: 5
+    name: "Conveyor Drive E"
+    type: "Belt Drive"
+    location: "Bay 4 — Central"
+    demo_engine_id: 24
+  - id: 6
+    name: "Heat Exchanger F"
+    type: "Shell & Tube Exchanger"
+    location: "Bay 2 — West"
+    demo_engine_id: 52
+
+# ------ Sensor Names (NASA C-MAPSS FD001) ------
+sensor_columns:
+  operational_settings: ["op_setting_1", "op_setting_2", "op_setting_3"]
+  sensors:
+    - { name: "s1",  desc: "Fan inlet temperature (°R)",       drop: true  }
+    - { name: "s2",  desc: "LPC outlet temperature (°R)",      drop: false }
+    - { name: "s3",  desc: "HPC outlet temperature (°R)",      drop: false }
+    - { name: "s4",  desc: "LPT outlet temperature (°R)",      drop: false }
+    - { name: "s5",  desc: "Fan inlet pressure (psia)",        drop: true  }
+    - { name: "s6",  desc: "Bypass-duct pressure (psia)",      drop: false }
+    - { name: "s7",  desc: "HPC outlet pressure (psia)",       drop: false }
+    - { name: "s8",  desc: "Physical fan speed (rpm)",         drop: false }
+    - { name: "s9",  desc: "Physical core speed (rpm)",        drop: false }
+    - { name: "s10", desc: "Engine pressure ratio",            drop: true  }
+    - { name: "s11", desc: "HPC outlet static pressure (psia)",drop: false }
+    - { name: "s12", desc: "Fuel/air ratio",                   drop: false }
+    - { name: "s13", desc: "Corrected fan speed (rpm)",        drop: false }
+    - { name: "s14", desc: "Corrected core speed (rpm)",       drop: false }
+    - { name: "s15", desc: "Bypass ratio",                     drop: false }
+    - { name: "s16", desc: "Burner fuel–air ratio",            drop: true  }
+    - { name: "s17", desc: "Bleed enthalpy",                   drop: false }
+    - { name: "s18", desc: "Demanded fan speed (rpm)",         drop: true  }
+    - { name: "s19", desc: "Demanded corrected fan speed",     drop: true  }
+    - { name: "s20", desc: "HPT coolant bleed (lbm/s)",        drop: false }
+    - { name: "s21", desc: "LPT coolant bleed (lbm/s)",        drop: false }
+
+# ------ Data Splits (NASA C-MAPSS FD001: 100 engines) ------
+data_splits:
+  total_train_engines: 100
+  train_count: 70          # model fitting
+  val_count: 15            # validation & early stopping
+  demo_count: 15           # live replay holdout (never touched in training)
+  window_size: 30          # sequence window length
+  rul_clip: 125            # piecewise RUL upper threshold
+
+# ------ Health Score Weights (must sum to 1.0) ------
+health_score:
+  rul_weight: 0.50         # normalized RUL contribution
+  anomaly_weight: 0.30     # reconstruction error contribution
+  failure_weight: 0.20     # binary classifier hazard probability
+
+# ------ Alert Thresholds ------
+alerts:
+  warning:
+    health_below: 60       # health score < 60 → warning
+    rul_below: 50          # predicted RUL < 50 cycles → warning
+    anomaly_above: 0.7     # anomaly score > 0.7 → warning
+  critical:
+    health_below: 30       # health score < 30 → critical
+    rul_below: 20          # predicted RUL < 20 cycles → critical
+    anomaly_above: 0.9     # anomaly score > 0.9 → critical
+
+# ------ Business Impact Assumptions (in Indian Rupees ₹) ------
+business:
+  currency: "INR"
+  currency_symbol: "₹"
+
+  # Downtime cost
+  loss_per_hour: 28500                      # ₹28,500/hr baseline unplanned stoppage loss
+  planned_maintenance_cost_per_hour: 8500   # ₹8,500/hr for scheduled servicing
+
+  # Energy
+  energy_tariff_per_kwh: 7.40               # ₹7.40 per kWh (state industrial grid tariff)
+  machine_power_kw: 45                      # average operating power rating per machine in kW
+  idle_power_fraction: 0.15                 # 15% power consumed during idle/drift
+
+  # Delivery / SLA
+  delay_penalty_per_order: 4200             # ₹4,200 contractual penalty per delayed shipment
+  avg_orders_per_hour: 1.3                  # throughput rate per production line
+
+  # Spare parts
+  avg_spare_part_cost: 25000                # ₹25,000 standard replacement component
+  emergency_markup: 2.0                     # rush logistics markup factor (2.0×)
+
+  # Labour
+  technician_hourly_rate: 650               # ₹650/hr maintenance crew base rate
+  overtime_multiplier: 1.5                  # 1.5× rate during overtime/weekend repair
+
+# ------ Self-Healing Rule Engine ------
+self_healing:
+  actions:
+    - name: "reduce_speed"
+      description: "Reduce machine speed by 15% to slow thermal degradation"
+      speed_reduction: 0.15
+      rul_extension_factor: 1.25
+    - name: "shift_load"
+      description: "Shift 20% workload to healthiest available standby unit"
+      min_target_health: 70
+    - name: "alert_operator"
+      description: "Emit immediate dispatch alert to maintenance supervisor"
+      response_time_minutes: 30
+    - name: "schedule_maintenance"
+      description: "Lock preventive maintenance window in next changeover"
+      lead_time_hours: 4
+
+# ------ What-If Simulator (SimPy) ------
+simulator:
+  default_sim_hours: 168           # 1 week simulation window
+  machine_mtbf_hours: 500          # mean time between failures baseline
+  repair_time_hours: 4             # average repair duration
+  production_rate_per_hour: 40     # nominal units per hour
+
+# ------ LLM / Factory GPT ------
+llm:
+  provider: "openai"               # "openai", "azure", or local endpoint
+  model: "gpt-4o-mini"
+  temperature: 0.2
+  max_tokens: 1024
+  system_prompt: >
+    You are the AI assistant for AI Factory Operating System.
+    You NEVER invent numbers or sensor readings. You ALWAYS call backend
+    tools to retrieve verified telemetry and explain findings in clear terms.
+
+# ------ Embedding / Vector Store ------
+embeddings:
+  model_name: "all-MiniLM-L6-v2"
+  faiss_index_path: "data/models/incident_index.faiss"
+  similarity_top_k: 5
+
+# ------ WebSocket Telemetry Stream ------
+websocket:
+  broadcast_interval_ms: 1000      # stream broadcast every 1000ms
+  max_connections: 50

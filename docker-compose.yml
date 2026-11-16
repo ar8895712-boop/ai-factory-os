@@ -1,0 +1,68 @@
+# ==============================================================
+# docker-compose.yml — Local Development Environment
+# Hot-reloading, volume mounts, PostgreSQL, and live telemetry
+# ==============================================================
+
+version: '3.8'
+
+services:
+  # --- PostgreSQL Database ---
+  db:
+    image: postgres:16-alpine
+    container_name: factory_os_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: factory_os
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d factory_os"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- FastAPI Backend (Hot-Reloading) ---
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: factory_os_backend
+    restart: unless-stopped
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    volumes:
+      - ./backend:/app/backend
+      - ./ml:/app/ml
+      - ./scripts:/app/scripts
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/factory_os
+      - CONFIG_PATH=/app/config.yaml
+      - CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173
+      - DEMO_MODE=true
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # --- React Frontend (Nginx Reverse Proxy) ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: factory_os_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+    driver: local

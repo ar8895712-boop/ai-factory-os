@@ -1,0 +1,25 @@
+# ==============================================================
+# .github/dependabot.yml — Automated Dependency Vulnerability Updates
+# ==============================================================
+
+version: 2
+updates:
+  # Python Dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+
+  # Frontend Node.js Dependencies
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"

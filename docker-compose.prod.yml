@@ -1,0 +1,69 @@
+# ==============================================================
+# docker-compose.prod.yml — Production Multi-Container Deployment
+# Optimized multi-worker backend, static Nginx proxy, restart policies
+# ==============================================================
+
+version: '3.8'
+
+services:
+  # --- PostgreSQL Production Storage ---
+  db:
+    image: postgres:16-alpine
+    container_name: factory_os_db_prod
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-factory_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_prod_password}
+      POSTGRES_DB: ${POSTGRES_DB:-factory_os_prod}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-factory_admin}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - factory_network
+
+  # --- FastAPI Backend (Multi-Worker Production Mode) ---
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: factory_os_backend_prod
+    restart: always
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4"]
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-factory_admin}:${POSTGRES_PASSWORD:-secure_prod_password}@db:5432/${POSTGRES_DB:-factory_os_prod}
+      - CONFIG_PATH=/app/config.yaml
+      - DISABLE_DOCS=true
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://your-domain.com}
+      - DEMO_MODE=false
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - factory_network
+
+  # --- Frontend Nginx Reverse Proxy ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: factory_os_frontend_prod
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - factory_network
+
+networks:
+  factory_network:
+    driver: bridge
+
+volumes:
+  postgres_prod_data:
+    driver: local

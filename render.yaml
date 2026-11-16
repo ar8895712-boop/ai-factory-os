@@ -1,0 +1,38 @@
+# ==============================================================
+# render.yaml — Render Infrastructure as Code Blueprint
+# One-click deployment for AI Factory OS FastAPI Backend & Postgres
+# ==============================================================
+
+services:
+  # --- FastAPI Backend Web Service ---
+  - type: web
+    name: ai-factory-os-backend
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install --upgrade pip && pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements.txt && python scripts/seed_db.py"
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /api/health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: CONFIG_PATH
+        value: ./config.yaml
+      - key: DEMO_MODE
+        value: "true"
+      - key: DISABLE_DOCS
+        value: "false"
+      - key: CORS_ORIGINS
+        value: "https://your-frontend.vercel.app,http://localhost:5173"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: factory-os-db
+          property: connectionString
+
+databases:
+  # --- PostgreSQL Managed Database ---
+  - name: factory-os-db
+    region: oregon
+    plan: free
+    databaseName: factory_os
+    user: factory_admin
